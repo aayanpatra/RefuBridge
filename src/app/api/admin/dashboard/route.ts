@@ -1,6 +1,10 @@
 import prisma from "@/lib/prisma";
+import { requireAdmin } from "@/lib/admin-auth";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const unauthorized = requireAdmin(request);
+  if (unauthorized) return unauthorized;
+
   try {
     const [
       donations,
@@ -199,7 +203,7 @@ export async function GET() {
         externalId: flag.refugee?.externalId ?? "",
         createdAt: flag.createdAt,
       })),
-    });
+    }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("Failed to load admin dashboard:", error);
     return Response.json({ error: "Unable to load dashboard data right now." }, { status: 500 });

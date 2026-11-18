@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { requireAdmin } from "@/lib/admin-auth";
 import {
   createPresentationNeeds,
   PRESENTATION_NEEDS_PER_REFRESH,
@@ -19,7 +20,10 @@ const fallbackProfiles = [
   { id: "presentation-refugee-06", name: "Demo profile 06", externalId: "RB-DEMO-006" },
 ];
 
-export async function POST() {
+export async function POST(request: Request) {
+  const unauthorized = requireAdmin(request);
+  if (unauthorized) return unauthorized;
+
   try {
     const result = await prisma.$transaction(async (tx) => {
       const removed = await tx.donation.deleteMany({ where: { status: "PENDING" } });

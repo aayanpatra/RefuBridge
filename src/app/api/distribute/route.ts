@@ -1,6 +1,10 @@
 import { runDistribution } from "@/lib/distribution";
+import { requireAdmin } from "@/lib/admin-auth";
 
-export async function POST() {
+export async function POST(request: Request) {
+  const unauthorized = requireAdmin(request);
+  if (unauthorized) return unauthorized;
+
   try {
     const summary = await runDistribution();
     return Response.json(summary);

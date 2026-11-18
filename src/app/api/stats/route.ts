@@ -1,6 +1,9 @@
 import prisma from "@/lib/prisma";
+import { connection } from "next/server";
 
 export async function GET() {
+  await connection();
+
   try {
     const [
       donationTotals,

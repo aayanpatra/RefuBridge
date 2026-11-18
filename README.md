@@ -10,18 +10,44 @@ start the development server:
 ```bash
 npm install
 cp .env.example .env
+# Set ADMIN_PASSWORD (16+ characters) and ADMIN_SESSION_SECRET (32+ characters)
 npm run db:migrate
 npm run seed
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) for the public home page or
-[http://localhost:3000/admin](http://localhost:3000/admin) for the public
-operations dashboard. The dashboard is intentionally accessible without a
-password for local demos.
+[http://localhost:3000/admin](http://localhost:3000/admin) to sign in to the
+operations dashboard.
 
-The default `.env.example` configures SQLite with `DATABASE_URL="file:./dev.db"`.
-Set `DATABASE_URL` in `.env` to use a different local database location.
+The default `.env.example` configures local SQLite with
+`DATABASE_URL="file:./dev.db"`. Set `ADMIN_PASSWORD` to a password of at least
+16 characters and `ADMIN_SESSION_SECRET` to a random secret of at least 32
+characters (for example, generate one with `openssl rand -base64 32`).
+
+## Vercel database and admin setup
+
+The app uses SQLite locally and supports a persistent Turso/libSQL database in
+production. In Turso, create a database and an authentication token, then set
+these variables in the Vercel project's **Settings → Environment Variables**:
+
+- `DATABASE_URL`: the Turso database URL (`libsql://...`)
+- `DATABASE_AUTH_TOKEN`: the database authentication token
+- `ADMIN_PASSWORD`: a unique password of at least 16 characters
+- `ADMIN_SESSION_SECRET`: a randomly generated secret of at least 32 characters
+
+Apply the SQL migration files to a new Turso database, in timestamp order, using
+the Turso CLI before deploying:
+
+```bash
+DB_NAME=your-turso-database-name
+turso db shell "$DB_NAME" < prisma/migrations/20261118181040_init/migration.sql
+turso db shell "$DB_NAME" < prisma/migrations/20261118183600_distribution_fraud_support/migration.sql
+```
+
+The admin session is stored in a signed, HTTP-only, secure production cookie
+that expires after 12 hours. The dashboard, its data/action APIs, fraud and
+distribution actions, and allocation CSV exports all require that session.
 
 ## Scripts
 
@@ -33,7 +59,7 @@ Set `DATABASE_URL` in `.env` to use a different local database location.
 
 ## Backend
 
-The backend uses Prisma with a local SQLite database. SQLite enum-like values
+The backend uses Prisma with SQLite. SQLite enum-like values
 are constrained by `CHECK` clauses in the initial migration.
 
 `npm run seed` is safe to rerun and adds fictional sample records, including

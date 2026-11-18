@@ -730,7 +730,9 @@ export default function AdminPage() {
           </nav>
           <div className="flex items-center gap-3">
             <span className="hidden items-center gap-2 text-[10px] text-slate-500 sm:flex"><i className="h-1.5 w-1.5 rounded-full bg-emerald-400" />LIVE · 5 SEC</span>
-            <Link className="rounded-lg border border-white/10 px-3 py-2 text-[11px] text-slate-300 hover:border-white/30 hover:text-white" href="/">Exit dashboard</Link>
+            <form action="/api/admin/logout" method="post">
+              <button className="rounded-lg border border-white/10 px-3 py-2 text-[11px] text-slate-300 hover:border-white/30 hover:text-white" type="submit">Sign out</button>
+            </form>
           </div>
         </div>
       </header>

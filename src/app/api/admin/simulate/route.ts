@@ -1,8 +1,12 @@
 import prisma from "@/lib/prisma";
+import { requireAdmin } from "@/lib/admin-auth";
 
 const demoAmounts = [25, 50, 75, 100, 150, 250, 500];
 
-export async function POST() {
+export async function POST(request: Request) {
+  const unauthorized = requireAdmin(request);
+  if (unauthorized) return unauthorized;
+
   try {
     const amountAed = demoAmounts[Math.floor(Math.random() * demoAmounts.length)];
     const donor = await prisma.donor.create({

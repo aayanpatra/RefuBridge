@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { requireAdmin } from "@/lib/admin-auth";
 
 type RouteContext = {
   params: Promise<{ runId: string; ngoId: string }>;
@@ -8,7 +9,10 @@ function csvCell(value: string): string {
   return `"${value.replaceAll('"', '""')}"`;
 }
 
-export async function GET(_request: Request, { params }: RouteContext) {
+export async function GET(request: Request, { params }: RouteContext) {
+  const unauthorized = requireAdmin(request);
+  if (unauthorized) return unauthorized;
+
   const { runId, ngoId } = await params;
 
   try {
@@ -43,6 +47,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": 'attachment; filename="distribution.csv"',
+        "Cache-Control": "no-store",
       },
     });
   } catch (error) {
