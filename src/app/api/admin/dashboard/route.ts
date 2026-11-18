@@ -12,7 +12,7 @@ export async function GET(request: Request) {
       donationTotals,
       donationCount,
       pendingTotals,
-      distributedTotals,
+      distributionTotals,
       needs,
       ngos,
       refugees,
@@ -32,9 +32,8 @@ export async function GET(request: Request) {
         where: { status: "PENDING" },
         _sum: { amountAed: true },
       }),
-      prisma.donation.aggregate({
-        where: { status: "DISTRIBUTED" },
-        _sum: { amountAed: true },
+      prisma.distributionRun.aggregate({
+        _sum: { totalDistributedAed: true },
       }),
       prisma.need.findMany({
         include: {
@@ -130,7 +129,7 @@ export async function GET(request: Request) {
         averageDonationAed:
           donationCount === 0 ? 0 : (donationTotals._sum.amountAed ?? 0) / donationCount,
         pendingPoolAed: pendingTotals._sum.amountAed ?? 0,
-        totalDistributedAed: distributedTotals._sum.amountAed ?? 0,
+        totalDistributedAed: distributionTotals._sum.totalDistributedAed ?? 0,
         openNeeds: needs.filter((need) => need.status === "OPEN").length,
         flaggedItems: fraudFlags.length,
       },
