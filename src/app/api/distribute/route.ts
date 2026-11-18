@@ -1,6 +1,8 @@
 import { runDistribution } from "@/lib/distribution";
 import { requireAdmin } from "@/lib/admin-auth";
 
+export const maxDuration = 30;
+
 export async function POST(request: Request) {
   const unauthorized = requireAdmin(request);
   if (unauthorized) return unauthorized;

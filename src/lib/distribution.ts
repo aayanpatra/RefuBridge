@@ -208,5 +208,5 @@ export async function runDistribution() {
       fundedNeeds,
       ngos: [...allocationsByNgo.values()],
     };
-  });
+  }, { timeout: 30_000 });
 }
