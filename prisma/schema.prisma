@@ -1,0 +1,111 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Donor {
+  id        String     @id @default(cuid())
+  name      String
+  email     String     @unique
+  createdAt DateTime   @default(now())
+  donations Donation[]
+}
+
+model Donation {
+  id        String   @id @default(cuid())
+  donorId   String
+  amountAed Float
+  status    String   @default("PENDING")
+  createdAt DateTime @default(now())
+  donor     Donor    @relation(fields: [donorId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+}
+
+model Ngo {
+  id          String       @id @default(cuid())
+  name        String
+  country     String
+  verified    Boolean      @default(false)
+  refugees    Refugee[]
+  allocations Allocation[]
+  fraudFlags  FraudFlag[]
+
+  @@index([verified])
+}
+
+model Refugee {
+  id         String      @id @default(cuid())
+  ngoId      String
+  name       String
+  age        Int
+  gender     String
+  externalId String      @unique
+  createdAt  DateTime    @default(now())
+  ngo        Ngo         @relation(fields: [ngoId], references: [id], onDelete: Cascade)
+  needs      Need[]
+  fraudFlags FraudFlag[]
+
+  @@index([ngoId])
+}
+
+model Need {
+  id          String       @id @default(cuid())
+  refugeeId   String
+  category    String
+  item        String
+  costAed     Float
+  stockLeft   Int
+  dailyUse    Int
+  fundedAed   Float        @default(0)
+  status      String       @default("OPEN")
+  refugee     Refugee      @relation(fields: [refugeeId], references: [id], onDelete: Cascade)
+  allocations Allocation[]
+
+  @@index([status, category])
+  @@index([refugeeId])
+}
+
+model Allocation {
+  id                String          @id @default(cuid())
+  needId            String
+  ngoId             String
+  amountAed         Float
+  spentAed          Float           @default(0)
+  distributionRunId String
+  createdAt         DateTime        @default(now())
+  need              Need            @relation(fields: [needId], references: [id], onDelete: Cascade)
+  ngo               Ngo             @relation(fields: [ngoId], references: [id], onDelete: Cascade)
+  distributionRun   DistributionRun @relation(fields: [distributionRunId], references: [id], onDelete: Cascade)
+
+  @@index([distributionRunId])
+  @@index([ngoId])
+  @@index([needId])
+}
+
+model DistributionRun {
+  id                  String       @id @default(cuid())
+  runAt               DateTime     @default(now())
+  totalDistributedAed Float
+  totalDonationsCount Int
+  allocations         Allocation[]
+}
+
+model FraudFlag {
+  id        String   @id @default(cuid())
+  ngoId     String?
+  refugeeId String?
+  type      String
+  note      String
+  createdAt DateTime @default(now())
+  ngo       Ngo?     @relation(fields: [ngoId], references: [id], onDelete: Cascade)
+  refugee   Refugee? @relation(fields: [refugeeId], references: [id], onDelete: Cascade)
+
+  @@index([ngoId])
+  @@index([refugeeId])
+  @@index([type])
+}
