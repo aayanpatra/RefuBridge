@@ -5,6 +5,8 @@ import {
   PRESENTATION_NEEDS_PER_REFRESH,
 } from "@/lib/presentation-needs";
 
+export const maxDuration = 30;
+
 const contributionsAed = [
   500, 600, 700, 800, 900, 1000, 1100, 1200, 1300, 1400, 1500,
   500, 600, 700, 800, 900, 1000, 1100, 1200, 1300, 1400, 1500,
@@ -66,18 +68,38 @@ export async function POST(request: Request) {
       const needs = createPresentationNeeds(refugees.map(({ id }) => id));
       await tx.need.createMany({ data: needs });
 
-      for (const [index, amountAed] of contributionsAed.entries()) {
-        const name = `Presentation Supporter ${String(index + 1).padStart(2, "0")}`;
-        const email = `presentation-supporter-${String(index + 1).padStart(2, "0")}@example.test`;
-        const donor = await tx.donor.upsert({
-          where: { email },
-          update: { name },
-          create: { name, email },
-        });
-        await tx.donation.create({
-          data: { donorId: donor.id, amountAed, status: "PENDING" },
-        });
+      const presentationDonors = contributionsAed.map((amountAed, index) => ({
+        amountAed,
+        name: `Presentation Supporter ${String(index + 1).padStart(2, "0")}`,
+        email: `presentation-supporter-${String(index + 1).padStart(2, "0")}@example.test`,
+      }));
+      const donorEmails = presentationDonors.map(({ email }) => email);
+      const existingDonors = await tx.donor.findMany({
+        where: { email: { in: donorEmails } },
+        select: { email: true },
+      });
+      const existingEmails = new Set(existingDonors.map(({ email }) => email));
+      const newDonors = presentationDonors
+        .filter(({ email }) => !existingEmails.has(email))
+        .map(({ name, email }) => ({ name, email }));
+      if (newDonors.length > 0) {
+        await tx.donor.createMany({ data: newDonors });
       }
+
+      const donors = await tx.donor.findMany({
+        where: { email: { in: donorEmails } },
+        select: { id: true, email: true },
+      });
+      const donorIdsByEmail = new Map<string, string>();
+      for (const donor of donors) {
+        donorIdsByEmail.set(donor.email, donor.id);
+      }
+      const donations = presentationDonors.map(({ amountAed, email }) => {
+        const donorId = donorIdsByEmail.get(email);
+        if (!donorId) throw new Error(`Missing presentation donor ${email}.`);
+        return { donorId, amountAed, status: "PENDING" };
+      });
+      await tx.donation.createMany({ data: donations });
 
       return {
         replacedCount: removed.count,
@@ -85,7 +107,7 @@ export async function POST(request: Request) {
         totalAed: contributionsAed.reduce((sum, amount) => sum + amount, 0),
         addedNeedsCount: PRESENTATION_NEEDS_PER_REFRESH,
       };
-    });
+    }, { timeout: 30_000 });
 
     return Response.json(result);
   } catch (error) {
