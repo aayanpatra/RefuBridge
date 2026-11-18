@@ -1,14 +1,41 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { gsap, prefersReducedMotion, tweenNumber } from "@/lib/motion";
 
 const quickAmounts = [10, 50, 100, 500];
 
 const fieldClass =
   "h-11 w-full rounded-lg border border-line bg-white px-3.5 text-sm text-ink outline-none transition placeholder:text-muted/60 focus:border-brand focus:ring-4 focus:ring-brand/10";
 
+const formatAmount = (value: number) =>
+  new Intl.NumberFormat("en-AE", { maximumFractionDigits: 2 }).format(value);
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Number that rolls to its new value instead of snapping. */
+function AnimatedAmount({ value }: { value: number }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [initialValue] = useState(value);
+
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    if (prefersReducedMotion()) {
+      element.textContent = formatAmount(value);
+      element.dataset.value = String(value);
+      return;
+    }
+    tweenNumber(element, value, { duration: 0.55, ease: "power2.out", format: formatAmount });
+  }, [value]);
+
+  return (
+    <span className="tabular-nums" data-value={initialValue} ref={ref}>
+      {formatAmount(initialValue)}
+    </span>
+  );
 }
 
 export default function DonationForm() {
@@ -20,6 +47,69 @@ export default function DonationForm() {
   const [success, setSuccess] = useState<{ name: string; amount: number } | null>(
     null,
   );
+
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  const successRef = useRef<HTMLParagraphElement>(null);
+
+  // Error: quick horizontal shake so it's felt, not just read
+  useEffect(() => {
+    const element = errorRef.current;
+    if (!errorMessage || !element || prefersReducedMotion()) return;
+    const tween = gsap.fromTo(
+      element,
+      { autoAlpha: 0, y: -6 },
+      {
+        autoAlpha: 1,
+        y: 0,
+        duration: 0.35,
+        ease: "power3.out",
+      },
+    );
+    const shake = gsap.fromTo(
+      element,
+      { x: 0 },
+      {
+        keyframes: [
+          { x: -8, duration: 0.07 },
+          { x: 8, duration: 0.07 },
+          { x: -5, duration: 0.07 },
+          { x: 5, duration: 0.07 },
+          { x: 0, duration: 0.07 },
+        ],
+        ease: "power1.inOut",
+      },
+    );
+    return () => {
+      tween.kill();
+      shake.kill();
+      gsap.set(element, { clearProps: "all" });
+    };
+  }, [errorMessage]);
+
+  // Success: springy pop
+  useEffect(() => {
+    const element = successRef.current;
+    if (!success || !element || prefersReducedMotion()) return;
+    const tween = gsap.fromTo(
+      element,
+      { autoAlpha: 0, y: 16, scale: 0.94 },
+      { autoAlpha: 1, y: 0, scale: 1, duration: 0.8, ease: "back.out(1.7)" },
+    );
+    return () => {
+      tween.kill();
+      gsap.set(element, { clearProps: "all" });
+    };
+  }, [success]);
+
+  // Tactile feedback when a preset amount is picked
+  function pulse(target: HTMLElement) {
+    if (prefersReducedMotion()) return;
+    gsap.fromTo(
+      target,
+      { scale: 0.92 },
+      { scale: 1, duration: 0.6, ease: "elastic.out(1, 0.5)", overwrite: "auto", clearProps: "transform" },
+    );
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -67,10 +157,6 @@ export default function DonationForm() {
       setIsSubmitting(false);
     }
   }
-
-  const formattedAmount = new Intl.NumberFormat("en-AE", {
-    maximumFractionDigits: 2,
-  }).format(success?.amount ?? (Number(amount) || 0));
 
   return (
     <div
@@ -133,7 +219,8 @@ export default function DonationForm() {
                     : "border-line bg-white text-ink hover:border-brand/50 hover:bg-brand-tint"
                 }`}
                 key={quickAmount}
-                onClick={() => {
+                onClick={(event) => {
+                  pulse(event.currentTarget);
                   setAmount(String(quickAmount));
                   setSuccess(null);
                 }}
@@ -173,6 +260,7 @@ export default function DonationForm() {
         {errorMessage ? (
           <p
             className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+            ref={errorRef}
             role="alert"
           >
             {errorMessage}
@@ -182,10 +270,11 @@ export default function DonationForm() {
         {success ? (
           <p
             aria-live="polite"
-            className="success-pop rounded-lg border border-brand/20 bg-brand-tint px-4 py-3 text-sm leading-6 text-ink"
+            className="rounded-lg border border-brand/20 bg-brand-tint px-4 py-3 text-sm leading-6 text-ink"
+            ref={successRef}
             role="status"
           >
-            Thank you, {success.name}. Your AED {formattedAmount} is now in the
+            Thank you, {success.name}. Your AED {formatAmount(success.amount)} is now in the
             pool and will be allocated to the most urgent needs at the end of
             the day.
           </p>
@@ -205,7 +294,9 @@ export default function DonationForm() {
               Processing…
             </>
           ) : (
-            <>Donate AED {formattedAmount}</>
+            <>
+              Donate AED <AnimatedAmount value={Number(amount) || 0} />
+            </>
           )}
         </button>
       </form>

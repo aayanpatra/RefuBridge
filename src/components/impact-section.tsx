@@ -1,8 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import gsap from "gsap";
-import { ScrollTrigger } from "gsap/ScrollTrigger";
+import {
+  MQ,
+  ScrollTrigger,
+  bindSpotlight,
+  gsap,
+  spotlightLight,
+  splitWords,
+  tweenNumber,
+  useIsoLayoutEffect,
+} from "@/lib/motion";
 
 type PlatformStats = {
   totalDonatedAed: number;
@@ -45,6 +53,17 @@ function formatValue(value: number) {
   );
 }
 
+/** Whole numbers count up as integers; decimals keep two places so digits don't jitter. */
+function formatterFor(target: number) {
+  return Number.isInteger(target)
+    ? (value: number) => formatValue(Math.round(value))
+    : (value: number) =>
+        new Intl.NumberFormat("en-AE", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }).format(value);
+}
+
 export default function ImpactSection() {
   const sectionRef = useRef<HTMLElement>(null);
   const [stats, setStats] = useState<PlatformStats | null>(null);
@@ -81,43 +100,98 @@ export default function ImpactSection() {
     return () => controller.abort();
   }, []);
 
-  useEffect(() => {
-    if (!stats || !sectionRef.current) {
-      return;
-    }
+  // Heading: masked word reveal on scroll. Also the "live" indicator's radar pings.
+  useIsoLayoutEffect(() => {
+    const title = sectionRef.current?.querySelector<HTMLElement>("#impact-title");
+    if (!title) return;
 
-    gsap.registerPlugin(ScrollTrigger);
-    const reducedMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-    const context = gsap.context(() => {
-      const counters =
-        sectionRef.current?.querySelectorAll<HTMLElement>("[data-count]");
-      counters?.forEach((element) => {
+    const mm = gsap.matchMedia();
+    mm.add(MQ.motion, () => {
+      const rings = sectionRef.current?.querySelectorAll<HTMLElement>(".live-ring");
+      if (rings && rings.length) {
+        const ping = gsap.fromTo(
+          rings,
+          { scale: 1, opacity: 0.55 },
+          { scale: 3.4, opacity: 0, duration: 2, ease: "power1.out", stagger: 1, repeat: -1 },
+        );
+        ScrollTrigger.create({
+          trigger: sectionRef.current,
+          start: "top bottom",
+          end: "bottom top",
+          onToggle: (self) => (self.isActive ? ping.resume() : ping.pause()),
+        });
+      }
+
+      const split = splitWords(title);
+      gsap.from(split.words, {
+        yPercent: 115,
+        rotate: 4,
+        transformOrigin: "0% 100%",
+        duration: 1.1,
+        stagger: 0.06,
+        ease: "expo.out",
+        scrollTrigger: { trigger: title, start: "top 86%", once: true },
+      });
+      return () => split.revert();
+    });
+    return () => mm.revert();
+  }, []);
+
+  // Metric cards + counters, once the live numbers arrive
+  useIsoLayoutEffect(() => {
+    const root = sectionRef.current;
+    if (!stats || !root) return;
+
+    const cards = Array.from(root.querySelectorAll<HTMLElement>(".impact-card"));
+    const counters = Array.from(root.querySelectorAll<HTMLElement>("[data-count]"));
+    const mm = gsap.matchMedia();
+
+    mm.add(MQ.motion, () => {
+      gsap.set(cards, { autoAlpha: 0, y: 36 });
+      ScrollTrigger.batch(cards, {
+        start: "top 92%",
+        once: true,
+        onEnter: (batch) =>
+          gsap.to(batch, {
+            autoAlpha: 1,
+            y: 0,
+            duration: 1,
+            stagger: 0.08,
+            ease: "expo.out",
+            overwrite: true,
+          }),
+      });
+
+      counters.forEach((element) => {
         const target = Number(element.dataset.count);
-        if (reducedMotion) {
-          element.textContent = formatValue(target);
-          return;
-        }
-
-        const counter = { value: 0 };
-        gsap.to(counter, {
-          value: target,
-          duration: 1.5,
-          ease: "power2.out",
-          scrollTrigger: {
-            trigger: element,
-            start: "top 88%",
-            once: true,
-          },
-          onUpdate: () => {
-            element.textContent = formatValue(counter.value);
-          },
+        ScrollTrigger.create({
+          trigger: element,
+          start: "top 94%",
+          once: true,
+          onEnter: () =>
+            tweenNumber(element, target, {
+              duration: 1.8,
+              ease: "power3.out",
+              format: formatterFor(target),
+            }),
         });
       });
-    }, sectionRef);
+    });
 
-    return () => context.revert();
+    mm.add(MQ.reduce, () => {
+      counters.forEach((element) => {
+        element.textContent = formatValue(Number(element.dataset.count));
+      });
+    });
+
+    mm.add(`${MQ.motion} and ${MQ.fine}`, () => bindSpotlight(cards));
+
+    // Skeleton → cards can change section height; re-measure downstream triggers
+    const frame = requestAnimationFrame(() => ScrollTrigger.refresh());
+    return () => {
+      cancelAnimationFrame(frame);
+      mm.revert();
+    };
   }, [stats]);
 
   const metrics: ImpactMetric[] = stats
@@ -167,12 +241,19 @@ export default function ImpactSection() {
             </p>
           </div>
           <div className="flex items-center gap-2 text-sm text-muted">
-            <span
-              aria-hidden="true"
-              className={`h-2 w-2 rounded-full ${
-                error ? "bg-amber-500" : "bg-brand"
-              }`}
-            />
+            <span aria-hidden="true" className="relative flex h-2 w-2">
+              {!error && (
+                <>
+                  <span className="live-ring absolute inset-0 rounded-full bg-brand" />
+                  <span className="live-ring absolute inset-0 rounded-full bg-brand" />
+                </>
+              )}
+              <span
+                className={`relative h-2 w-2 rounded-full ${
+                  error ? "bg-amber-500" : "bg-brand"
+                }`}
+              />
+            </span>
             {error ? "Data connection paused" : "Connected to live data"}
           </div>
         </div>
@@ -184,7 +265,10 @@ export default function ImpactSection() {
         >
           {metrics.length > 0
             ? metrics.map((metric) => (
-                <article className="bg-white p-6" key={metric.label}>
+                <article
+                  className={`impact-card ${spotlightLight} bg-white p-6`}
+                  key={metric.label}
+                >
                   <p className="text-sm text-muted">{metric.label}</p>
                   <p className="mt-5 text-3xl font-semibold tracking-tight text-ink tabular-nums">
                     {metric.prefix ? (

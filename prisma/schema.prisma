@@ -44,13 +44,14 @@ model Refugee {
   name       String
   age        Int
   gender     String
-  externalId String      @unique
+  externalId String
   createdAt  DateTime    @default(now())
   ngo        Ngo         @relation(fields: [ngoId], references: [id], onDelete: Cascade)
   needs      Need[]
   fraudFlags FraudFlag[]
 
   @@index([ngoId])
+  @@index([externalId])
 }
 
 model Need {
@@ -58,7 +59,7 @@ model Need {
   refugeeId   String
   category    String
   item        String
-  costAed     Float
+  costAed     Float?
   stockLeft   Int
   dailyUse    Int
   fundedAed   Float        @default(0)

@@ -54,7 +54,7 @@ async function seed() {
     const ngo = ngos[index % 6];
     const refugeeId = `refugee-${String(number).padStart(3, "0")}`;
     const refugee = await prisma.refugee.upsert({
-      where: { externalId: `RB-FIC-${String(number).padStart(3, "0")}` },
+      where: { id: refugeeId },
       update: {
         ngoId: ngo.id,
         name: `${givenNames[index % givenNames.length]} ${familyNames[Math.floor(index / 5) % familyNames.length]}`,
